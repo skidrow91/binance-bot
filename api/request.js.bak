@@ -1,0 +1,35 @@
+require('dotenv').config();
+const axios = require('axios');
+
+class Request {
+
+  constructor()
+  {
+    this.URL = process.env.API_URL;
+    this.API_KEY = process.env.H_API_KEY;
+    this.SECRET_KEY = process.env.H_SECRET_KEY;
+  }
+
+  get(endpoint, data) {
+    let url = this.URL + endpoint;
+    return axios.get(url, {
+      headers: {
+        'X-MBX-APIKEY': this.API_KEY
+      },
+      params: data
+    })
+  }
+
+  post(endpoint, data) {
+    let url = this.URL + endpoint;
+    return axios.post(url, {
+      headers: {
+        'X-MBX-APIKEY': this.API_KEY
+      },
+      params: data
+    })
+  }
+
+}
+
+module.export = new Request();

@@ -1,0 +1,28 @@
+const Request = require('./request.js.bak');
+
+class Binance {
+
+  constructor()
+  {
+    this.endpoints = {
+      exchange: 'exchangeInfo',
+      orderbook: 'depth',
+      order: 'order'
+    }
+    this.request = Request;
+  }
+
+  async exchangeInfo() {
+    let response;
+    try {
+      response = await this.request.get(this.endpoints.exchange, {});
+    } catch (err) {
+      // throw Error(err);
+      console.log(err);
+    }
+    return response;
+  }
+
+}
+
+module.exports = new Binance()
