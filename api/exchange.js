@@ -6,6 +6,8 @@ const AMOUNT = process.env.AMOUNT;
 
 const BUYSELLSYMBOL = process.env.SYMBOL.split('/');
 
+const Candle = require('./candle');
+
 const threshold = 2;
 const PROFIT_RATE = 10;
 const STOP_RATE = 50;
@@ -33,9 +35,9 @@ const TYPES = {
   LIMIT_MAKER: 'LIMIT_MAKER'
 }
 
-const getCurrentPrice = async () => {
+const getCurrentPrice = async (symbol) => {
   let params = {
-    symbol: SYMBOL
+    symbol: symbol
   }
   let priceObj = await binanceAPI.getCurrentPrice(params);
   return priceObj;
@@ -47,6 +49,10 @@ const calculateAmount = async (price, type = 'BUY') => {
   let balance = await getBalance(symbol);
   let totalAmount = parseFloat(balance)/parseFloat(price);
   let amount = totalAmount * parseFloat(AMOUNT) / 100;
+  // console.log(totalAmount);
+  // console.log(balance);
+  // console.log(price);
+  // console.log(amount);
   // if (fee > 0) {
   //   amount += amount * fee;
   // }
@@ -112,7 +118,11 @@ const buy = async (price, qty, type = TYPES.LIMIT, stopPrice = 0) => {
     orderData.side = "BUY";
     orderData.type = type;
     orderData.quantity = parseFloat(qty);
-    orderData.price = parseFloat(price);
+    // orderData.price = parseFloat(price);
+
+    if (type != TYPES.MARKET) {
+      orderData.price = parseFloat(price);
+    }
 
     if (type == TYPES.TAKE_PROFIT_LIMIT) {
       orderData.stopPrice = parseFloat(stopPrice);
@@ -195,11 +205,12 @@ const makeDecision = async (symbol) => {
   let order = await getOrder(symbol);
   let orderObj = {
     decision: 'BUY',
+    type: TYPES.TAKE_PROFIT_LIMIT,
+    currentPrice: 0,
     orderQty: 0,
     orderPrice: 0
   };
   if (order) {
-
     if (order.symbol == symbol) {
       let params = {
         symbol: symbol,
@@ -217,15 +228,61 @@ const makeDecision = async (symbol) => {
         orderObj.orderQty = orderBinance.origQty
         orderObj.decision = 'SELL';
       } else if (orderBinance.status == "NEW") {
-        orderBinance = await cancelOrder(order);
-        order.status = orderBinance.status;
-        await order.save();
+        let currentPriceObj = await getCurrentPrice(SYMBOL);
+        let rate = ((parseFloat(order.price) - parseFloat(currentPriceObj.price)) / parseFloat(order.price)) * 100
+        if (rate >= 1) {
+          orderBinance = await cancelOrder(order);
+          order.status = orderBinance.status;
+          await order.save();
+        }
         orderObj.decision = 'SKIPPED';
       }
     }
+  } else {
+    let now = Date.now();
+    let from = Candle.addHours(now, -10);
+    let candles = await Candle.getCandles(SYMBOL, from, now);
+    let currentPriceObj = await getCurrentPrice(SYMBOL);
+    let avrPriceObj = Candle.getCandlesAvrPrice(candles);
+    // if (!(parseFloat(currentPriceObj.price) <= parseFloat(avrPriceObj.avrPrice) )) {
+    //   orderObj.decision = 'SKIPPED';
+    // }
+
+    let decisionObj = shouldBuy(parseFloat(currentPriceObj.price), parseFloat(avrPriceObj.avrPrice));
+    orderObj.decision = decisionObj.decision;
+    if (decisionObj.decision == 'BUY') {
+      orderObj.type = decisionObj.type;
+      orderObj.currentPrice = currentPriceObj.price;
+    }
+    // console.log(decisionObj);
+
+    // console.log(priceObj.avrLowPrice);
+    // console.log(priceObj.avrHighPrice);
+    // console.log(priceObj.avrPrice);
   }
 
   return orderObj;
+}
+
+const shouldBuy = (currentPrice, comparePrice) => {
+  let decisionObj = {
+    decision: 'BUY',
+    type: TYPES.TAKE_PROFIT_LIMIT
+  }
+  if (currentPrice <= comparePrice) {
+    decisionObj.type = TYPES.MARKET
+  } else {
+    let rate = ((currentPrice - comparePrice) / currentPrice) * 100
+    if (rate >= 1) {
+      // skipped
+      decisionObj.decision = 'SKIPPED'
+    } else {
+      // buy take profit limit
+      decisionObj.type = TYPES.TAKE_PROFIT_LIMIT
+    }
+  }
+
+  return decisionObj;
 }
 
 const updateTimeOffset = async () => {
@@ -287,43 +344,66 @@ getBalance = async (symbol) => {
 }
 
 module.exports.placeOrder = async () => {
+  // let now = Date.now();
+  // let from = Candle.addHours(now, -10);
+  // let candles = await Candle.getCandles(SYMBOL, from, now);
+  // candles.forEach((candle) => {
+  //   console.log(Candle.parseCandle(candle));
+  // });
+  // let priceObj = Candle.getCandlesAvrPrice(candles);
+  // console.log(priceObj.avrLowPrice);
+  // console.log(priceObj.avrHighPrice);
+  // console.log(priceObj.avrPrice);
+  // return false;
+
+
   await updateTimeOffset();
   let orderObj = await makeDecision(SYMBOL);
-  // console.log(orderObj);
-  let priceFilter = await getPriceFilter(SYMBOL);
-  // console.log(priceFilter);
+
+  console.log(orderObj);
 
   if (orderObj.decision == 'BUY') {
     // console.log(timeOffset);
     // let fixed = 4/1000;
     // let finalPrice = 1/100;
-    let priceObj = await getCurrentPrice();
+    // let priceObj = await getCurrentPrice();
     // let price = parseFloat(priceObj.price)+fixed;
 
-    let profitObj = calculateProfit(priceObj.price, "BUY");
-    // console.log(profitObj);
-    let price = profitObj.price;
-    let stopPrice = profitObj.stopPrice;
+    let orderData = [];
 
-    // let price = calculateProfit(priceObj.price, "BUY")
-    // let stopPrice = parseFloat(priceObj.price)+finalPrice;
-    // console.log(price);
-    // return;
-    // let amount = ((parseFloat(AMOUNT)/price)).toFixed(3);
-    let amount = await calculateAmount(price, "BUY");
-    let priceData = {
-      price: price,
-      stopPrice: stopPrice,
-      quantity: amount
-    };
-    priceData = formatPrice(priceData, priceFilter);
-    // console.log(priceData);
-    // return amount;
-    // get db with symbol and status open
-    let buyData = await buy(priceData.price, priceData.quantity, TYPES.TAKE_PROFIT_LIMIT, priceData.stopPrice);
-    // console.log(buyData)
+    if (orderObj.type == TYPES.MARKET) {
+      let buyData = await buy(0, priceData.quantity, TYPES.MARKET, 0);
+      orderData = await addOrder(buyData);
+    } else {
 
-    let orderData = await addOrder(buyData);
+      let profitObj = calculateProfit(orderObj.currentPrice, "BUY");
+
+      // console.log(profitObj);
+      let price = profitObj.price;
+      let stopPrice = profitObj.stopPrice;
+
+      // let price = calculateProfit(priceObj.price, "BUY")
+      // let stopPrice = parseFloat(priceObj.price)+finalPrice;
+      // console.log(price);
+      // return;
+      // let amount = ((parseFloat(AMOUNT)/price)).toFixed(3);
+      let priceFilter = await getPriceFilter(SYMBOL);
+    // console.log(priceFilter);
+      let amount = await calculateAmount(price, "BUY");
+      let priceData = {
+        price: price,
+        stopPrice: stopPrice,
+        quantity: amount
+      };
+      priceData = formatPrice(priceData, priceFilter);
+      console.log(priceData);
+      // return false;
+      // return amount;
+      // get db with symbol and status open
+      let buyData = await buy(priceData.price, priceData.quantity, orderObj.type, priceData.stopPrice);
+      // console.log(buyData)
+      orderData = await addOrder(buyData);
+    }
 
     return orderData;
 
@@ -338,15 +418,12 @@ module.exports.placeOrder = async () => {
     let sellData = await sell(price, amount, TYPES.TAKE_PROFIT_LIMIT, stopPrice);
     // console.log(sellData)
 
-    // let orderData = await addOrder(sellData);
+    let orderData = await addOrder(sellData);
 
-    // return orderData;
+    return orderData;
   } else {
     return [];
   }
-
-
-
 
   // check price with current price
   // if >= threshold => sell
