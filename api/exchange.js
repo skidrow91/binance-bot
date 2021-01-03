@@ -8,22 +8,22 @@ const BUYSELLSYMBOL = process.env.SYMBOL.split('/');
 
 const Candle = require('./candle');
 
+const LIMIT_ATTEMPT = process.env.LIMIT_ATTEMPT;
+
 const threshold = 2;
-const PROFIT_RATE = 10;
-const STOP_RATE = 50;
+const PROFIT_RATE = 2;
+const STOP_RATE = 10;
 let timeOffset = 0;
 
-const ORDER_DATA = {
-  symbol: SYMBOL,
-  side: "SELL",
-  type: "LIMIT",
-  timeInForce: "GTC",
-  quantity: "",
-  price: "",
-  recvWindow: "60000",
-  newOrderRespType: "FULL",
-  timestamp: (Date.now() + timeOffset)
-}
+// const ORDER_DATA = {
+//   symbol: SYMBOL,
+//   side: "SELL",
+//   type: "LIMIT",
+//   quantity: "",
+//   recvWindow: "60000",
+//   newOrderRespType: "FULL",
+//   timestamp: (Date.now() + timeOffset)
+// }
 
 const TYPES = {
   LIMIT: 'LIMIT',
@@ -43,12 +43,17 @@ const getCurrentPrice = async (symbol) => {
   return priceObj;
 }
 
-const calculateAmount = async (price, type = 'BUY') => {
+const calculateAmount = async (buysellsymbol ,price, type = 'BUY') => {
   // let fee = await getFeeTrading();
-  let symbol = (type == 'BUY') ? BUYSELLSYMBOL[1] : BUYSELLSYMBOL[0];
+  let symbol = (type == 'BUY') ? buysellsymbol[1] : buysellsymbol[0];
   let balance = await getBalance(symbol);
-  let totalAmount = parseFloat(balance)/parseFloat(price);
-  let amount = totalAmount * parseFloat(AMOUNT) / 100;
+  let amount = 0;
+  if (type == 'BUY') {
+    let totalAmount = parseFloat(balance)/parseFloat(price);
+    amount = totalAmount * parseFloat(AMOUNT) / 100;
+  } else {
+    amount = balance;
+  }
   // console.log(totalAmount);
   // console.log(balance);
   // console.log(price);
@@ -63,6 +68,9 @@ const calculateProfit = (currentPrice, type = 'BUY') => {
   let profit = (parseFloat(currentPrice) * PROFIT_RATE) / 100;
   let stop = (parseFloat(profit) * STOP_RATE) / 100;
   let price = parseFloat(currentPrice), stopPrice = parseFloat(currentPrice);
+  // console.log(profit);
+  // console.log(price);
+  // console.log(stopPrice);
   if (type == 'BUY') {
     price -= profit;
     stopPrice = price - stop;
@@ -103,20 +111,37 @@ const getPriceFilter = async (symbol) => {
 }
 
 const formatPrice = (priceData, priceFilter) => {
-  priceData.price = parseFloat(priceData.price).toFixed(getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
+  if (priceData.hasOwnProperty('price'))
+  {
+    priceData.price = parseFloat(priceData.price).toFixed(getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
+  }
   if (priceData.hasOwnProperty('stopPrice'))
   {
     priceData.stopPrice = parseFloat(priceData.stopPrice).toFixed(getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
   }
-  priceData.quantity = parseFloat(priceData.quantity).toFixed(getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty));
+  let qty = Math.floor(parseFloat(priceData.quantity)*100)/100
+  priceData.quantity = qty.toFixed(getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty));
+
   return priceData
 }
 
-const buy = async (price, qty, type = TYPES.LIMIT, stopPrice = 0) => {
+const buy = async (symbol, price, qty, type = TYPES.LIMIT, stopPrice = 0) => {
   try {
-    let orderData = ORDER_DATA;
+    let orderData = {
+      symbol: symbol,
+      side: "BUY",
+      type: "LIMIT",
+      quantity: "",
+      recvWindow: "60000",
+      newOrderRespType: "FULL",
+      timestamp: (Date.now() + timeOffset)
+    };
     orderData.side = "BUY";
     orderData.type = type;
+
+    if (type != TYPES.MARKET) {
+      orderData.timeInForce = 'GTC';
+    }
     orderData.quantity = parseFloat(qty);
     // orderData.price = parseFloat(price);
 
@@ -139,19 +164,46 @@ const buy = async (price, qty, type = TYPES.LIMIT, stopPrice = 0) => {
   }
 }
 
-const sell = async (price, qty, type = TYPES.LIMIT) => {
-  let params = {
-    symbol: SYMBOL,
-    side: "SELL",
-    type: type,
-    timeInForce: "GTC",
-    quantity: qty,
-    price: price,
-    recvWindow: "5000",
-    timestamp: Date.now()
+const sell = async (symbol, price, qty, type = TYPES.LIMIT, stopPrice = 0) => {
+  try {
+    // let orderData = ORDER_DATA;
+    let orderData = {
+      symbol: symbol,
+      side: "SELL",
+      type: "LIMIT",
+      quantity: "",
+      recvWindow: "60000",
+      newOrderRespType: "FULL",
+      timestamp: (Date.now() + timeOffset)
+    };
+    orderData.side = "SELL";
+    orderData.type = type;
+
+    if (type != TYPES.MARKET) {
+      orderData.timeInForce = 'GTC';
+    }
+    orderData.quantity = qty;
+    // orderData.price = parseFloat(price);
+
+    if (type != TYPES.MARKET) {
+      orderData.price = price;
+    }
+
+    if (type == TYPES.TAKE_PROFIT_LIMIT) {
+      orderData.stopPrice = stopPrice;
+    }
+
+    orderData.timestamp = (Date.now() + timeOffset);
+
+    // console.log(orderData);
+    // return false;
+
+    let response = await binanceAPI.newOrder(orderData);
+    return response;
+  } catch (err) {
+    console.log(err);
+    throw new Error(err);
   }
-  let response = await binanceAPI.newOrder(params);
-  return response;
 }
 
 const addOrder = async (data) => {
@@ -175,7 +227,7 @@ const addOrder = async (data) => {
 const getOrder = async (symbol) => {
   let ret = []
   try {
-    ret = await OrderModel.findOne({symbol: symbol, status: "NEW"})
+    ret = await OrderModel.findOne({symbol: symbol, side: 'BUY', localStatus: 'OPEN'}).sort({"_id": -1})
   } catch (err) {
     console.log(err)
     throw new Error(err)
@@ -203,6 +255,8 @@ const cancelOrder = async (data) => {
 
 const makeDecision = async (symbol) => {
   let order = await getOrder(symbol);
+  // console.log(order);
+  // return false;
   let orderObj = {
     decision: 'BUY',
     type: TYPES.TAKE_PROFIT_LIMIT,
@@ -219,20 +273,48 @@ const makeDecision = async (symbol) => {
         timestamp: Date.now()
       }
       orderBinance = await binanceAPI.queryOrder(params);
+      // console.log(orderBinance);
       if (orderBinance.status != order.status) {
         order.status = orderBinance.status;
         await order.save();
       }
       if (orderBinance.status == "FILLED") {
-        orderObj.orderPrice = orderBinance.price
+        orderObj.orderPrice = order.price
         orderObj.orderQty = orderBinance.origQty
         orderObj.decision = 'SELL';
+
+        order.status = orderBinance.status;
+
+        await order.save();
+
+
+        let currentPriceObj = await getCurrentPrice(symbol);
+
+        let decisionObj = shouldSell(parseFloat(orderObj.orderPrice), parseFloat(currentPriceObj.price));
+
+        orderObj.type = decisionObj.type;
+
+        // console.log(currentPriceObj);
+        // console.log(decisionObj);
+        // return false;
+
+        if (decisionObj.decision == 'SKIPPED') {
+          orderObj.decision = decisionObj.decision;
+        }
+
       } else if (orderBinance.status == "NEW") {
-        let currentPriceObj = await getCurrentPrice(SYMBOL);
-        let rate = ((parseFloat(order.price) - parseFloat(currentPriceObj.price)) / parseFloat(order.price)) * 100
+        let currentPriceObj = await getCurrentPrice(symbol);
+        let rate = ((parseFloat(currentPriceObj.price) - parseFloat(order.price)) / parseFloat(order.price)) * 100
         if (rate >= 1) {
-          orderBinance = await cancelOrder(order);
-          order.status = orderBinance.status;
+          // console.log(rate);
+          // console.log(order);
+          if (order.limitAttempt >= LIMIT_ATTEMPT) {
+            orderBinance = await cancelOrder(order);
+            order.status = orderBinance.status;
+            order.localStatus = orderBinance.status;
+          } else {
+            order.limitAttempt += 1;
+          }
           await order.save();
         }
         orderObj.decision = 'SKIPPED';
@@ -241,8 +323,8 @@ const makeDecision = async (symbol) => {
   } else {
     let now = Date.now();
     let from = Candle.addHours(now, -10);
-    let candles = await Candle.getCandles(SYMBOL, from, now);
-    let currentPriceObj = await getCurrentPrice(SYMBOL);
+    let candles = await Candle.getCandles(symbol, from, now);
+    let currentPriceObj = await getCurrentPrice(symbol);
     let avrPriceObj = Candle.getCandlesAvrPrice(candles);
     // if (!(parseFloat(currentPriceObj.price) <= parseFloat(avrPriceObj.avrPrice) )) {
     //   orderObj.decision = 'SKIPPED';
@@ -285,6 +367,29 @@ const shouldBuy = (currentPrice, comparePrice) => {
   return decisionObj;
 }
 
+const shouldSell = (orderPrice, currentPrice) => {
+  let profitRate = PROFIT_RATE;
+  let decisionObj = {
+    decision: 'SELL',
+    type: TYPES.TAKE_PROFIT_LIMIT
+  }
+  if (orderPrice >= currentPrice) {
+    decisionObj.decision = 'SKIPPED'
+  } else {
+    let rate = ((currentPrice - orderPrice) / currentPrice) * 100
+    if (rate >= parseFloat(profitRate)) {
+      decisionObj.type = TYPES.MARKET
+    } else if ((parseFloat(profitRate)-rate) <= 1) {
+      // buy take profit limit
+      decisionObj.type = TYPES.TAKE_PROFIT_LIMIT
+    } else {
+      // skipped
+      decisionObj.decision = 'SKIPPED';
+    }
+  }
+  return decisionObj;
+}
+
 const updateTimeOffset = async () => {
   try {
     let timeObj = await binanceAPI.getServerTime();
@@ -297,18 +402,20 @@ const updateTimeOffset = async () => {
   }
 }
 
-getFeeTrading = async () => {
+getFeeTrading = async (symbol) => {
   try {
     let params = {
-      symbol: SYMBOL,
+      symbol: symbol,
       recvWindow: "60000",
       timestamp: Date.now()
     }
+    // console.log(params);
     let tradeFeeObj = await binanceAPI.getFeeTrading(params);
+    // console.log(tradeFeeObj);
     let fee = 0;
     if (tradeFeeObj.hasOwnProperty('tradeFee')) {
       tradeFeeObj.tradeFee.forEach((elm) => {
-        if (elm.symbol == SYMBOL) {
+        if (elm.symbol == symbol) {
           fee = elm.maker;
         }
       })
@@ -343,7 +450,7 @@ getBalance = async (symbol) => {
   }
 }
 
-module.exports.placeOrder = async () => {
+module.exports.placeOrder = async (rawSymbol) => {
   // let now = Date.now();
   // let from = Candle.addHours(now, -10);
   // let candles = await Candle.getCandles(SYMBOL, from, now);
@@ -356,11 +463,15 @@ module.exports.placeOrder = async () => {
   // console.log(priceObj.avrPrice);
   // return false;
 
+  let symbol = rawSymbol.replace('/', '');
+  let buysellsymbol = rawSymbol.split('/');
+
 
   await updateTimeOffset();
-  let orderObj = await makeDecision(SYMBOL);
+  let orderObj = await makeDecision(symbol);
 
-  console.log(orderObj);
+  // console.log(orderObj);
+  // return false;
 
   if (orderObj.decision == 'BUY') {
     // console.log(timeOffset);
@@ -372,7 +483,20 @@ module.exports.placeOrder = async () => {
     let orderData = [];
 
     if (orderObj.type == TYPES.MARKET) {
-      let buyData = await buy(0, priceData.quantity, TYPES.MARKET, 0);
+      let priceFilter = await getPriceFilter(symbol);
+      let amount = await calculateAmount(buysellsymbol, orderObj.currentPrice, "BUY");
+
+      let priceData = {
+        quantity: amount
+      };
+
+      priceData = formatPrice(priceData, priceFilter);
+
+      let buyData = await buy(symbol, 0, priceData.quantity, TYPES.MARKET, 0);
+      buyData.localStatus = 'OPEN';
+      buyData.price = orderObj.currentPrice;
+      buyData.limitAttempt = 0;
+
       orderData = await addOrder(buyData);
     } else {
 
@@ -387,9 +511,9 @@ module.exports.placeOrder = async () => {
       // console.log(price);
       // return;
       // let amount = ((parseFloat(AMOUNT)/price)).toFixed(3);
-      let priceFilter = await getPriceFilter(SYMBOL);
+      let priceFilter = await getPriceFilter(symbol);
     // console.log(priceFilter);
-      let amount = await calculateAmount(price, "BUY");
+      let amount = await calculateAmount(buysellsymbol, price, "BUY");
       let priceData = {
         price: price,
         stopPrice: stopPrice,
@@ -400,7 +524,9 @@ module.exports.placeOrder = async () => {
       // return false;
       // return amount;
       // get db with symbol and status open
-      let buyData = await buy(priceData.price, priceData.quantity, orderObj.type, priceData.stopPrice);
+      let buyData = await buy(symbol, priceData.price, priceData.quantity, orderObj.type, priceData.stopPrice);
+      buyData.localStatus = 'OPEN';
+      buyData.limitAttempt = 0;
       // console.log(buyData)
       orderData = await addOrder(buyData);
     }
@@ -408,19 +534,59 @@ module.exports.placeOrder = async () => {
     return orderData;
 
   } else if (orderObj.decision == 'SELL') {
-    let profitObj = calculateProfit(orderObj.orderPrice, "SELL");
-    let price = profitObj.price;
-    let stopPrice = profitObj.stopPrice;
 
-    let amount = await calculateAmount(price, "SELL");
-    // console.log(amount);
+    let orderData = [];
 
-    let sellData = await sell(price, amount, TYPES.TAKE_PROFIT_LIMIT, stopPrice);
-    // console.log(sellData)
+    if (orderObj.type == TYPES.MARKET) {
 
-    let orderData = await addOrder(sellData);
+      let amount = await calculateAmount(buysellsymbol, 0, "SELL");
+
+      let priceFilter = await getPriceFilter(symbol);
+
+      let priceData = {
+        quantity: amount
+      };
+
+      priceData = formatPrice(priceData, priceFilter);
+
+      // console.log(amount);
+      // console.log(priceData);
+      // return false;
+
+      let sellData = await sell(symbol, 0, priceData.quantity, orderObj.type, 0);
+
+      orderData = await addOrder(sellData);
+
+    } else {
+
+      let profitObj = calculateProfit(orderObj.orderPrice, "SELL");
+      // console.log(profitObj);
+      // return false;
+      let price = profitObj.price;
+      let stopPrice = profitObj.stopPrice;
+
+      let priceFilter = await getPriceFilter(symbol);
+
+      let amount = await calculateAmount(buysellsymbol, price, "SELL");
+      let priceData = {
+        price: price,
+        stopPrice: stopPrice,
+        quantity: amount
+      };
+      priceData = formatPrice(priceData, priceFilter);
+      // console.log(priceData);
+      // return false;
+
+      let sellData = await sell(symbol, priceData.price, priceData.quantity, orderObj.type, priceData.stopPrice);
+      // console.log(sellData)
+      // return false;
+
+      orderData = await addOrder(sellData);
+
+    }
 
     return orderData;
+
   } else {
     return [];
   }

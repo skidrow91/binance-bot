@@ -21,7 +21,15 @@ const endpoints = {
 
 sign = (params) => {
   let query = '';
-  if (params.hasOwnProperty('symbol'))
+  for (let key in params) {
+    if (params.hasOwnProperty(key)) {
+      if (query.length > 0) {
+        query += '&';
+      }
+      query += key+'='+params[key];
+    }
+  }
+  /*if (params.hasOwnProperty('symbol'))
   {
     if (query.length > 0) {
       query += '&';
@@ -118,7 +126,7 @@ sign = (params) => {
       query += '&';
     }
     query += 'stopPrice='+params.stopPrice;
-  }
+  }*/
 
   // console.log(query);
 
@@ -189,6 +197,7 @@ module.exports.newOrder = async (params) => {
   let data;
   try {
     params.signature = sign(params);
+    // console.log(params);
     let response = await request.post(endpoints.order, params);
     data = response.data
   } catch (err) {
@@ -202,6 +211,8 @@ module.exports.queryOrder = async (params) => {
   let data;
   try {
     params.signature = sign(params);
+    // console.log(params);
+    // return false;
     let response = await request.get(endpoints.order, params);
     data = response.data
   } catch (err) {
@@ -277,6 +288,7 @@ module.exports.getFeeTrading = async (params) => {
     let response = await request.getW(endpoints.feetrading, params);
     data = response.data
   } catch (err) {
+    console.log(err);
     throw new Error(err)
   }
   return data;

@@ -11,7 +11,9 @@ const orderSchema = new Schema({
     status: String,
     timeInForce: String,
     type: String,
-    side: String
+    side: String,
+    localStatus: String,
+    limitAttempt: Number
 })
 
 module.exports = mongoose.model('Order', orderSchema)
