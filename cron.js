@@ -7,24 +7,27 @@ const exchange = require('./api/exchange')
 
 // const app = express()
 
-const sleep = (ms) => {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
+// const sleep = (ms) => {
+//   return new Promise((resolve) => {
+//     setTimeout(resolve, ms);
+//   });
+// }
 
 cron.schedule('* * * * *', async function() {
-  console.log('Start Place Order');
+  // console.log('Start Place Order');
 
-  let rawData = fs.readFileSync('./symbols.json');
-  let data = JSON.parse(rawData);
-  data.symbols.forEach((symbol) => {
-    let orderData = await exchange.placeOrder(symbol);
-    console.log(orderData);
-    await sleep(10000);
-  })
+  // let rawData = fs.readFileSync('./symbols.json');
+  // let data = JSON.parse(rawData);
+  // // console.log(data);
+  // data.symbols.forEach(async (symbol) => {
+  //   let orderData = await exchange.placeOrder(symbol);
+  //   console.log(orderData);
+  //   await sleep(20000);
+  // })
 
-  console.log('End Place Order');
+  // console.log('End Place Order');
+
+  exchange.run();
 })
 
 

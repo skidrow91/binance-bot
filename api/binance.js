@@ -1,332 +1,125 @@
 require('dotenv').config();
-var crypto = require('crypto');
-const request = require('./request')
+const BinanceAPI = require('./binance_api');
+const Status = require('./status')
 
-const SECRET_KEY = process.env.H_SECRET_KEY;
+class Binance {
 
-const endpoints = {
-  exchange: 'exchangeInfo',
-  orderbook: 'depth',
-  order: 'order',
-  openorders: 'openOrders',
-  avgprice: 'avgPrice',
-  price: 'ticker/price',
-  pricehour: 'ticker/24hr',
-  time: 'time',
-  account: 'account',
-  klines: 'klines',
-  feetrading: 'tradeFee.html',
-  assetdetail: 'assetDetail.html'
-}
-
-sign = (params) => {
-  let query = '';
-  for (let key in params) {
-    if (params.hasOwnProperty(key)) {
-      if (query.length > 0) {
-        query += '&';
+  async getTimeOffset () {
+    try {
+      let timeObj = await BinanceAPI.getServerTime()
+      if (timeObj.hasOwnProperty('serverTime')) {
+        timeOffset = timeObj.serverTime - Date.now()
+        return timeOffset
       }
-      query += key+'='+params[key];
+      return 0
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
     }
   }
-  /*if (params.hasOwnProperty('symbol'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'symbol='+params.symbol;
-  }
-  if (params.hasOwnProperty('orderId'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'orderId='+params.orderId;
-  }
-  if (params.hasOwnProperty('origClientOrderId'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'origClientOrderId='+params.origClientOrderId;
-  }
-  if (params.hasOwnProperty('side'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'side='+params.side;
-  }
-  if (params.hasOwnProperty('type'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'type='+params.type;
-  }
-  if (params.hasOwnProperty('timeInForce'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'timeInForce='+params.timeInForce;
-  }
-  if (params.hasOwnProperty('quantity'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'quantity='+params.quantity;
-  }
-  if (params.hasOwnProperty('price'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'price='+params.price;
-  }
-  if (params.hasOwnProperty('icebergQty'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'icebergQty='+params.icebergQty;
-  }
-  if (params.hasOwnProperty('recvWindow'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'recvWindow='+params.recvWindow;
-  }
-  if (params.hasOwnProperty('newOrderRespType'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'newOrderRespType='+params.newOrderRespType;
-  }
-  // if (params.hasOwnProperty('orderId'))
-  // {
-  //   if (query.length > 0) {
-  //     query += '&';
-  //   }
-  //   query += 'orderId='+params.orderId;
-  // }
-  if (params.hasOwnProperty('timestamp'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'timestamp='+params.timestamp;
-  }
-  if (params.hasOwnProperty('stopPrice'))
-  {
-    if (query.length > 0) {
-      query += '&';
-    }
-    query += 'stopPrice='+params.stopPrice;
-  }*/
 
-  // console.log(query);
-
-  let signature = crypto.createHmac("sha256", SECRET_KEY).update(query).digest("hex");
-
-  return signature;
-}
-
-module.exports.getAccountInfo = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    let response = await request.get(endpoints.account, params);
-    data = response.data
-  } catch (err) {
-    console.log(err)
-    throw new Error(err)
+  // symbol = USDT / DOT / ...
+  async getBalance (balanceSymbol, type) {
+    try {
+      let symbol = (type == Status.BUY) ? balanceSymbol[1] : balanceSymbol[0];
+      let params = {
+        recvWindow: "60000",
+        timestamp: Date.now()
+      }
+      let balance = 0;
+      let accountInfo = await BinanceAPI.getAccountInfo(params);
+      if (accountInfo.hasOwnProperty('balances')) {
+        accountInfo.balances.forEach((elm, idx) => {
+          if (elm.asset == symbol) {
+            balance = elm.free
+          }
+        });
+      }
+      return balance
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
+    }
   }
-  return data;
-}
 
-module.exports.getkKLines = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.klines, params);
-    data = response.data
-  } catch (err) {
-    console.log(err);
-    throw new Error(err)
+  async getCurrentPrice (symbol) {
+    try {
+      let params = {
+        symbol: symbol
+      }
+      let priceObj = await BinanceAPI.getCurrentPrice(params)
+      return parseFloat(priceObj.price)
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
+    }
   }
-  return data;
-}
 
-module.exports.exchangeInfo = async (symbol) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.exchange, {});
-    let symbols = response.data;
-    // console.log(symbols);
-    if (symbol.length > 0) {
-      symbols.symbols.forEach((elm) => {
-        if (elm.symbol == symbol)
-        {
-          data = elm;
+  async createOrder (orderData) {
+    try {
+      let response = await BinanceAPI.newOrder(orderData)
+      return response
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
+    }
+  }
+
+  async getPriceFilter (symbol) {
+    let marketInfo = await BinanceAPI.exchangeInfo(symbol);
+    let retData = {};
+    let filters = marketInfo.filters;
+    filters.forEach((elm) => {
+      if (elm.filterType == 'PRICE_FILTER') {
+        retData.PRICE_FILTER = {
+          minPrice: elm.minPrice,
+          maxPrice: elm.maxPrice,
+          tickSize: elm.tickSize
         }
-      })
-    } else {
-      data = symbols.symbol;
+      } else if (elm.filterType == 'LOT_SIZE') {
+        retData.LOT_SIZE = {
+          minQty: elm.minQty,
+          maxQty: elm.maxQty,
+          stepSize: elm.stepSize
+        }
+      }
+    });
+    return retData;
+  }
+
+  async getOrder (symbol, orderId) {
+    try {
+      let params = {
+        symbol: symbol,
+        orderId: orderId,
+        recvWindow: "60000",
+        timestamp: Date.now()
+      }
+      orderBinance = await BinanceAPI.queryOrder(params);
+      return orderBinance;
+    } catch (err) {
+      console.log(err)
+      throw new Error(err)
     }
-  } catch (err) {
-    throw new Error(err)
   }
-  return data;
+
+  async cancelOrder (symbol, orderId) {
+    try {
+      let params = {
+        symbol: symbol,
+        orderId: orderId,
+        recvWindow: "60000",
+        timestamp: Date.now()
+      }
+
+      let retData = await BinanceAPI.cancelOrder(params);
+      return retData;
+    } catch (err) {
+      console.log(err);
+      throw new Error(err);
+    }
+  }
+
 }
 
-module.exports.orderBook = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.orderbook, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.newOrder = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    // console.log(params);
-    let response = await request.post(endpoints.order, params);
-    data = response.data
-  } catch (err) {
-    console.log(err)
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.queryOrder = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    // console.log(params);
-    // return false;
-    let response = await request.get(endpoints.order, params);
-    data = response.data
-  } catch (err) {
-    console.log(err)
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.cancelOrder = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    let response = await request.delete(endpoints.order, params);
-    data = response.data
-  } catch (err) {
-    console.log(err);
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.cancelAllOrders = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    let response = await request.delete(endpoints.openorders, params);
-    data = response.data
-  } catch (err) {
-    console.log(err);
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.openOrders = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.openorders, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getAvPrice = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.avgprice, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getCurrentPrice = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.price, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getFeeTrading = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    let response = await request.getW(endpoints.feetrading, params);
-    data = response.data
-  } catch (err) {
-    console.log(err);
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getAssetDetail = async (params) => {
-  let data;
-  try {
-    params.signature = sign(params);
-    let response = await request.getW(endpoints.assetdetail, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getPrice24h = async (params) => {
-  let data;
-  try {
-    let response = await request.get(endpoints.pricehour, params);
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-module.exports.getServerTime = async () => {
-  let data;
-  try {
-    let response = await request.get(endpoints.time, {});
-    data = response.data
-  } catch (err) {
-    throw new Error(err)
-  }
-  return data;
-}
-
-
-
+module.exports = new Binance()

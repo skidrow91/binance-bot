@@ -1,4 +1,4 @@
-const binanceAPI = require('./binance');
+const BinanceAPI = require('./binance_api');
 
 class Candle {
   // 17-09-2013 10:08
@@ -9,7 +9,7 @@ class Candle {
     let date = new Date(dateParts[2], parseInt(dateParts[1], 10) - 1, dateParts[0], timeParts[0], timeParts[1]);
     // console.log(date.toGMTString());
     // console.log(date.toTimeString());
-    console.log(Date.now());
+    // console.log(Date.now());
     return date.getTime();
   }
 
@@ -59,7 +59,7 @@ class Candle {
       startTime: from,
       endTime: to
     }
-    let data = await binanceAPI.getkKLines(params);
+    let data = await BinanceAPI.getkKLines(params);
     return data;
   }
 }
