@@ -37,9 +37,10 @@ class Exchange {
     let self = this
     try {
       this.symbols.symbols.forEach(async (symbol) => {
+        console.log('Start #'+symbol)
         let orderData = await self.placeOrder(symbol);
         console.log(orderData);
-        // await sleep(20000);
+        await self.sleep(20000);
 
         // console.log(symbol)
       })
