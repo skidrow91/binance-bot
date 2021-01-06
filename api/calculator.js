@@ -66,7 +66,7 @@ class Calculator {
     //   stopPrice = price + stop;
     // }
 
-    return {price: priceObj.price, stopPrice: priceObj.stopPrice, amount: priceObj.amount}
+    return {price: priceObj.price, stopPrice: priceObj.stopPrice, quantity: priceObj.quantity}
   }
 
   async calculateProfitSell(symbol, currentPrice, balance) {
@@ -87,7 +87,7 @@ class Calculator {
       quantity: amount
     }, priceFilter)
 
-    return {price: priceObj.price, stopPrice: priceObj.stopPrice, amount: priceObj.amount}
+    return {price: priceObj.price, stopPrice: priceObj.stopPrice, quantity: priceObj.quantity}
   }
 
   formatPrice(priceData, priceFilter) {

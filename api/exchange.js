@@ -295,6 +295,8 @@ class Exchange {
 
         let obj = await Calculator.calculateProfitBuy(retRules.symbol, retRules.currentPrice, retRules.balance)
 
+        // console.log(obj)
+
         retRules.price = obj.price
         retRules.stopPrice = obj.stopPrice
         retRules.quantity = obj.quantity
@@ -346,7 +348,7 @@ class Exchange {
 
           retRules.price = obj.price
           retRules.stopPrice = obj.stopPrice
-          retRules.quantity = obj.amount
+          retRules.quantity = obj.quantity
 
         // skipped
         } else {
