@@ -72,7 +72,7 @@ class Exchange {
           order.status = orderBinance.status
           await order.save()
 
-        } else if (orderBinance.status = Status.NEW) {
+        } else if (orderBinance.status == Status.NEW) {
           let currentPrice = await Binance.getCurrentPrice(symbol)
           let rate = ((currentPrice - parseFloat(order.price)) / parseFloat(order.price)) * 100
           if (rate >= 1) {
@@ -104,7 +104,7 @@ class Exchange {
           order.status = orderBinance.status
           await order.save()
 
-        } else if (orderBinance.status = Status.NEW) {
+        } else if (orderBinance.status == Status.NEW) {
           let currentPrice = await Binance.getCurrentPrice(symbol)
           let rate = ((currentPrice - parseFloat(order.price)) / parseFloat(order.price)) * 100
           if (rate >= 1) {
@@ -150,6 +150,7 @@ class Exchange {
           if (ruleObj.type != Status.SKIPPED) {
             let orderObj = await this.sell(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
             orderObj.price = currentPrice
+            orderObj.limitAttempt = 0
             let order = await OrderModel.addOrder(orderObj)
 
             if (orderObj.status == Status.FILLED) {
@@ -188,6 +189,7 @@ class Exchange {
         if (ruleObj.type != Status.SKIPPED) {
           let orderObj = await this.buy(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
           orderObj.price = currentPrice
+          orderObj.limitAttempt = 0
           console.log(orderObj)
           let order = await OrderModel.addOrder(orderObj)
 
