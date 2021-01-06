@@ -61,7 +61,7 @@ class Exchange {
     if (order) {
 
       if (order.side == Status.BUY) {
-        orderBinance = await getOrder(symbol, order.orderId);
+        let orderBinance = await Binance.getBinanceOrder(symbol, order.orderId);
         if (orderBinance.status = Status.FILLED) {
 
           await QueueModel.addQueue({symbol: symbol, price: order.price})
@@ -93,7 +93,7 @@ class Exchange {
 
       } else {
 
-        orderBinance = await getOrder(symbol, order.orderId);
+        let orderBinance = await Binance.getBinanceOrder(symbol, order.orderId);
         if (orderBinance.status = Status.FILLED) {
 
           await QueueModel.delQueue({symbol: symbol})
@@ -145,7 +145,7 @@ class Exchange {
           let ruleObj = await this.makeRule(symbol, Status.SELL, currentPrice, balance, order.price)
 
           if (ruleObj.type != Status.SKIPPED) {
-            let orderObj = this.sell(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
+            let orderObj = await this.sell(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
             orderObj.price = currentPrice
             let order = await OrderModel.addOrder(orderObj)
 
@@ -183,8 +183,9 @@ class Exchange {
         // return false
 
         if (ruleObj.type != Status.SKIPPED) {
-          let orderObj = this.buy(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
+          let orderObj = await this.buy(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
           orderObj.price = currentPrice
+          console.log(orderObj)
           let order = await OrderModel.addOrder(orderObj)
 
           if (orderObj.status == Status.FILLED) {

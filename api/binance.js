@@ -87,7 +87,7 @@ class Binance {
     return retData;
   }
 
-  async getOrder (symbol, orderId) {
+  async getBinanceOrder (symbol, orderId) {
     try {
       let params = {
         symbol: symbol,
@@ -95,7 +95,7 @@ class Binance {
         recvWindow: "60000",
         timestamp: Date.now()
       }
-      orderBinance = await BinanceAPI.queryOrder(params);
+      let orderBinance = await BinanceAPI.queryOrder(params);
       return orderBinance;
     } catch (err) {
       console.log(err)
