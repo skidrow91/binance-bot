@@ -65,7 +65,7 @@ class Exchange {
 
       if (order.side == Status.BUY) {
         let orderBinance = await Binance.getBinanceOrder(symbol, order.orderId);
-        if (orderBinance.status = Status.FILLED) {
+        if (orderBinance.status == Status.FILLED) {
 
           await QueueModel.addQueue({symbol: symbol, price: order.price})
 
@@ -97,7 +97,7 @@ class Exchange {
       } else {
 
         let orderBinance = await Binance.getBinanceOrder(symbol, order.orderId);
-        if (orderBinance.status = Status.FILLED) {
+        if (orderBinance.status == Status.FILLED) {
 
           await QueueModel.delQueue(symbol)
 
