@@ -44,15 +44,19 @@ class Calculator {
     price -= profit
     stopPrice = price - stop
 
-    let amount = this.calculateBuyAmount(symbol, price, balance)
+    let amount = await this.calculateBuyAmount(symbol, price, balance)
 
     let priceFilter = await Binance.getPriceFilter(symbol)
+
+    // console.log(priceFilter)
 
     let priceObj = this.formatPrice({
       price: price,
       stopPrice: stopPrice,
       quantity: amount
     }, priceFilter)
+
+    // console.log(priceObj)
 
     // if (type == 'BUY') {
     //   price -= profit;
@@ -61,6 +65,27 @@ class Calculator {
     //   price += profit;
     //   stopPrice = price + stop;
     // }
+
+    return {price: priceObj.price, stopPrice: priceObj.stopPrice, amount: priceObj.amount}
+  }
+
+  async calculateProfitSell(symbol, currentPrice, balance) {
+    let profit = currentPrice * PROFIT_RATE / 100
+    let stop = profit * STOP_RATE / 100
+    let price = parseFloat(currentPrice), stopPrice = parseFloat(currentPrice)
+
+    price += profit;
+    stopPrice = price + stop;
+
+    let amount = balance
+
+    let priceFilter = await Binance.getPriceFilter(symbol)
+
+    let priceObj = this.formatPrice({
+      price: price,
+      stopPrice: stopPrice,
+      quantity: amount
+    }, priceFilter)
 
     return {price: priceObj.price, stopPrice: priceObj.stopPrice, amount: priceObj.amount}
   }
@@ -84,14 +109,14 @@ class Calculator {
   formatPrice(priceData, priceFilter) {
     if (priceData.hasOwnProperty('price'))
     {
-      priceData.price = parseFloat(priceData.price).toFixed(getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
+      priceData.price = parseFloat(priceData.price).toFixed(this.getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
     }
     if (priceData.hasOwnProperty('stopPrice'))
     {
-      priceData.stopPrice = parseFloat(priceData.stopPrice).toFixed(getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
+      priceData.stopPrice = parseFloat(priceData.stopPrice).toFixed(this.getLengthOfDecimalNumber(priceFilter.PRICE_FILTER.minPrice));
     }
     let qty = Math.floor(parseFloat(priceData.quantity)*100)/100
-    priceData.quantity = qty.toFixed(getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty));
+    priceData.quantity = qty.toFixed(this.getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty));
 
     return priceData
   }

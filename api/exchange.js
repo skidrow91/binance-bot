@@ -48,7 +48,6 @@ class Exchange {
     }
   }
 
-
   async placeOrder(rawSymbol) {
     let symbol = rawSymbol.replace('/', '')
     let buysellsymbol = rawSymbol.split('/')
@@ -90,13 +89,39 @@ class Exchange {
           await order.save()
         }
 
-        if (order.status != orderBinance.status) {
-          order.status = orderBinance.status
-        }
-
         return []
 
       } else {
+
+        orderBinance = await getOrder(symbol, order.orderId);
+        if (orderBinance.status = Status.FILLED) {
+
+          await QueueModel.delQueue({symbol: symbol})
+
+          order.status = orderBinance.status
+          await order.save()
+
+        } else if (orderBinance.status = Status.NEW) {
+          let currentPrice = await Binance.getCurrentPrice(symbol)
+          let rate = ((currentPrice - parseFloat(order.price)) / parseFloat(order.price)) * 100
+          if (rate >= 1) {
+
+            if (order.limitAttempt >= LIMIT_ATTEMPT) {
+              orderBinance = await Binance.cancelOrder(symbol, order.orderId);
+              order.status = orderBinance.status;
+            } else {
+              order.limitAttempt += 1;
+            }
+            await order.save();
+          }
+
+        } else {
+
+          order.status = orderBinance.status
+          await order.save()
+        }
+
+        return []
 
 
       }
@@ -104,15 +129,34 @@ class Exchange {
     // buy
     } else {
 
-      let queue = QueueModel.getQueue(symbol)
+      let queue = await QueueModel.getQueue(symbol)
+      // console.log(queue)
 
       // create sell
       if (queue) {
         let order = this.checkOrder(symbol, Status.BUY, Status.FILLED)
+
+        // sell
         if (order) {
+          let balance = await Binance.getBalance(buysellsymbol, Status.SELL)
+
+          let currentPrice = await Binance.getCurrentPrice(symbol)
+
+          let ruleObj = await this.makeRule(symbol, Status.SELL, currentPrice, balance, order.price)
+
+          if (ruleObj.type != Status.SKIPPED) {
+            let orderObj = this.sell(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
+            orderObj.price = currentPrice
+            let order = await OrderModel.addOrder(orderObj)
+
+            if (orderObj.status == Status.FILLED) {
+              await QueueModel.delQueue({symbol: symbol})
+            }
+
+            return order
+          }
 
         }
-
 
       // create buy
       } else {
@@ -136,13 +180,16 @@ class Exchange {
         let ruleObj = await this.makeRule(symbol, Status.BUY, currentPrice, balance, 0)
 
         // console.log(ruleObj)
+        // return false
 
         if (ruleObj.type != Status.SKIPPED) {
           let orderObj = this.buy(symbol, ruleObj.price, ruleObj.quantity, ruleObj.type, ruleObj.stopPrice)
           orderObj.price = currentPrice
           let order = await OrderModel.addOrder(orderObj)
 
-          await QueueModel.addQueue({symbol: symbol, price: currentPrice})
+          if (orderObj.status == Status.FILLED) {
+            await QueueModel.addQueue({symbol: symbol, price: currentPrice})
+          }
 
           return order
         }
@@ -204,12 +251,12 @@ class Exchange {
     // buy
     if (side == Status.BUY) {
 
-      rules = this.buyRule(rules)
+      rules = await this.buyRule(rules)
 
     // sell
     } else {
 
-      rules = this.sellRule(rules)
+      rules = await this.sellRule(rules)
 
     }
 
@@ -230,7 +277,7 @@ class Exchange {
 
       retRules.type = Status.MARKET
 
-      let amount = Calculator.calculateBuyAmount(retRules.symbol, retRules.currentPrice, retRules.balance)
+      let amount = await Calculator.calculateBuyAmount(retRules.symbol, retRules.currentPrice, retRules.balance)
 
       retRules.quantity = amount
 
@@ -243,11 +290,11 @@ class Exchange {
         retRules.type = Status.TAKE_PROFIT_LIMIT
         // calculate price, stopprice, profit, ....
 
-        let obj = Calculator.calculateProfitBuy(retRules.symbol, retRules.currentPrice, retRules.balance)
+        let obj = await Calculator.calculateProfitBuy(retRules.symbol, retRules.currentPrice, retRules.balance)
 
         retRules.price = obj.price
         retRules.stopPrice = obj.stopPrice
-        retRules.quantity = obj.amount
+        retRules.quantity = obj.quantity
 
       } else {
 
@@ -271,6 +318,8 @@ class Exchange {
       if (profitRate >= PROFIT_RATE) {
 
         retRules.type = Status.MARKET
+        let amount = retRules.balance
+        retRules.quantity = amount
       // take profit or skipped
       } else {
 
@@ -280,6 +329,12 @@ class Exchange {
         if (diffRate <= 1) {
           retRules.type = Status.TAKE_PROFIT_LIMIT
           // calculate price, stopprice, profit ...
+          let obj = await Calculator.calculateProfitSell(retRules.symbol, retRules.currentPrice, retRules.balance)
+
+          retRules.price = obj.price
+          retRules.stopPrice = obj.stopPrice
+          retRules.quantity = obj.amount
+
         // skipped
         } else {
           retRules.type = Status.SKIPPED
