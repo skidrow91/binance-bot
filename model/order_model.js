@@ -23,7 +23,7 @@ class OrderModel {
   async getOrder(orderData) {
     let ret = []
     try {
-      ret = await Order.findOne({symbol: orderData.symbol, side: orderData.side, localStatus: orderData.localStatus}).sort({"_id": -1})
+      ret = await Order.findOne({symbol: orderData.symbol, side: orderData.side, status: orderData.status}).sort({"_id": -1})
     } catch (err) {
       console.log(err)
       throw new Error(err)

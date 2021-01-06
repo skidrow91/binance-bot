@@ -58,6 +58,8 @@ class Exchange {
       order = await this.checkOrder(symbol, Status.SELL, Status.NEW)
     }
 
+    // console.log(order)
+
     if (order) {
 
       if (order.side == Status.BUY) {
@@ -96,7 +98,7 @@ class Exchange {
         let orderBinance = await Binance.getBinanceOrder(symbol, order.orderId);
         if (orderBinance.status = Status.FILLED) {
 
-          await QueueModel.delQueue({symbol: symbol})
+          await QueueModel.delQueue(symbol)
 
           order.status = orderBinance.status
           await order.save()
@@ -150,7 +152,7 @@ class Exchange {
             let order = await OrderModel.addOrder(orderObj)
 
             if (orderObj.status == Status.FILLED) {
-              await QueueModel.delQueue({symbol: symbol})
+              await QueueModel.delQueue(symbol)
             }
 
             return order
@@ -319,8 +321,18 @@ class Exchange {
       if (profitRate >= PROFIT_RATE) {
 
         retRules.type = Status.MARKET
+
         let amount = retRules.balance
-        retRules.quantity = amount
+
+        let priceFilter = await Binance.getPriceFilter(retRules.symbol)
+
+        let priceObj = Calculator.formatPrice({
+          price: 0,
+          stopPrice: 0,
+          quantity: amount
+        }, priceFilter)
+
+        retRules.quantity = priceObj.quantity
       // take profit or skipped
       } else {
 

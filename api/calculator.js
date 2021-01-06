@@ -90,22 +90,6 @@ class Calculator {
     return {price: priceObj.price, stopPrice: priceObj.stopPrice, amount: priceObj.amount}
   }
 
-  calculateProfit(currentPrice, type = 'BUY') {
-    let profit = (parseFloat(currentPrice) * PROFIT_RATE) / 100;
-    let stop = (parseFloat(profit) * STOP_RATE) / 100;
-    let price = parseFloat(currentPrice), stopPrice = parseFloat(currentPrice);
-
-    if (type == 'BUY') {
-      price -= profit;
-      stopPrice = price - stop;
-    } else {
-      price += profit;
-      stopPrice = price + stop;
-    }
-
-    return {price: price, stopPrice: stopPrice};
-  }
-
   formatPrice(priceData, priceFilter) {
     if (priceData.hasOwnProperty('price'))
     {
