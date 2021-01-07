@@ -163,6 +163,8 @@ class Exchange {
 
         }
 
+        return []
+
       // create buy
       } else {
 
