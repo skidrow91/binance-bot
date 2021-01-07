@@ -6,11 +6,17 @@ const PROFIT_RATE = parseFloat(process.env.PROFIT_RATE)
 const AMOUNT_RATE = parseFloat(process.env.AMOUNT_RATE)
 const LIMIT_TOTAL = parseFloat(process.env.LIMIT_TOTAL)
 const STOP_RATE = parseFloat(process.env.STOP_RATE)
+const TRADE_FEE = parseFloat(process.env.TRADE_FEE)
 
 class Calculator {
 
   getLengthOfDecimalNumber(num) {
     return parseFloat(num).toString().split('.')[1].length || 0;
+  }
+
+  generateNumber(num) {
+    let n = 1
+    return parseFloat(n.toString().padEnd((num+1), 0))
   }
 
   async calculateBuyAmount(symbol, currentPrice, balance) {
@@ -27,13 +33,17 @@ class Calculator {
 
     let priceFilter = await Binance.getPriceFilter(symbol)
 
-    let priceObj = this.formatPrice({
+    amount = this.formatQty(amount, priceFilter)
+
+    /*let priceObj = this.formatPrice({
       price: 0,
       stopPrice: 0,
       quantity: amount
     }, priceFilter)
 
-    return priceObj.quantity
+    return priceObj.quantity*/
+
+    return amount
   }
 
   async calculateProfitBuy(symbol, currentPrice, balance) {
@@ -56,6 +66,9 @@ class Calculator {
       quantity: amount
     }, priceFilter)
 
+    priceObj.quantity = this.formatQty(amount, priceFilter)
+
+
     // console.log(priceObj)
 
     // if (type == 'BUY') {
@@ -77,7 +90,7 @@ class Calculator {
     price += profit;
     stopPrice = price + stop;
 
-    let amount = balance
+    let amount = balance - TRADE_FEE
 
     let priceFilter = await Binance.getPriceFilter(symbol)
 
@@ -86,6 +99,8 @@ class Calculator {
       stopPrice: stopPrice,
       quantity: amount
     }, priceFilter)
+
+    priceObj.quantity = this.formatQty(amount, priceFilter)
 
     return {price: priceObj.price, stopPrice: priceObj.stopPrice, quantity: priceObj.quantity}
   }
@@ -103,6 +118,11 @@ class Calculator {
     priceData.quantity = qty.toFixed(this.getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty));
 
     return priceData
+  }
+
+  formatQty(qty, priceFilter) {
+    let number = this.generateNumber(this.getLengthOfDecimalNumber(priceFilter.LOT_SIZE.minQty))
+    return Math.floor((qty*number)) / number
   }
 }
 

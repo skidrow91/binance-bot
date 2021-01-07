@@ -12,6 +12,7 @@ const PROFIT_RATE = parseFloat(process.env.PROFIT_RATE)
 const AMOUNT_RATE = parseFloat(process.env.AMOUNT_RATE)
 const LIMIT_TOTAL = parseFloat(process.env.LIMIT_TOTAL)
 const LIMIT_ATTEMPT = parseFloat(process.env.LIMIT_ATTEMPT)
+const TRADE_FEE = parseFloat(process.env.TRADE_FEE)
 
 class Exchange {
 
@@ -327,17 +328,19 @@ class Exchange {
 
         retRules.type = Status.MARKET
 
-        let amount = retRules.balance
+        let amount = retRules.balance - TRADE_FEE
 
         let priceFilter = await Binance.getPriceFilter(retRules.symbol)
 
-        let priceObj = Calculator.formatPrice({
+        /*let priceObj = Calculator.formatPrice({
           price: 0,
           stopPrice: 0,
           quantity: amount
-        }, priceFilter)
+        }, priceFilter)*/
 
-        retRules.quantity = priceObj.quantity
+        amount = Calculator.formatQty(amount, priceFilter)
+
+        retRules.quantity = amount
       // take profit or skipped
       } else {
 
