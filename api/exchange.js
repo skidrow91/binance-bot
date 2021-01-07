@@ -138,7 +138,7 @@ class Exchange {
 
       // create sell
       if (queue) {
-        let order = this.checkOrder(symbol, Status.BUY, Status.FILLED)
+        let order = await this.checkOrder(symbol, Status.BUY, Status.FILLED)
 
         // sell
         if (order) {

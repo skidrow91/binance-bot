@@ -27,7 +27,7 @@ class Calculator {
     let total = amount * currentPrice
 
     if (total < LIMIT_TOTAL) {
-      total = LIMIT_TOTAL + 0.001
+      total = LIMIT_TOTAL
       amount = total / currentPrice
     }
 
