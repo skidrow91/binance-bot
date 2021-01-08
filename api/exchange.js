@@ -108,7 +108,7 @@ class Exchange {
         } else if (orderBinance.status == Status.NEW) {
           let currentPrice = await Binance.getCurrentPrice(symbol)
           let rate = ((currentPrice - parseFloat(order.price)) / parseFloat(order.price)) * 100
-          if (rate >= 1) {
+          if (rate < 1) {
 
             if (order.limitAttempt >= LIMIT_ATTEMPT) {
               orderBinance = await Binance.cancelOrder(symbol, order.orderId);
